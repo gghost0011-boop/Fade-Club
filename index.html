@@ -208,6 +208,9 @@
   input:focus,select:focus{outline:none;border-color:var(--gold)}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   .row>div{min-width:0}
+  /* Empêche la rangée des jours (qui défile) d'élargir toute la carte sur téléphone */
+  .booking>*,form>*,.info-list li>div{min-width:0}
+  .days{max-width:100%}
   .step{font-size:.8rem;color:var(--muted);margin-bottom:8px;display:block}
   .step b{color:var(--gold)}
   /* Choix du service */
@@ -602,16 +605,28 @@
     document.querySelectorAll('.day').forEach(x => x.classList.toggle('on', x === b));
     sel.date = b.dataset.date; sel.time = null;
     busy = new Set(); renderSlots(true);
-    if (stopWatch) stopWatch();
-    // Écoute en direct les créneaux déjà pris pour ce jour
-    stopWatch = window.watchBusy ? window.watchBusy(sel.date, set => { busy = set; renderSlots(); }) : null;
+    if (stopWatch) { stopWatch(); stopWatch = null; }
+    startWatch(sel.date);
   };
+  // Écoute en direct les créneaux déjà pris pour ce jour (attend que Firebase soit chargé)
+  function startWatch(date){
+    if (date !== sel.date) return;
+    if (!window.watchBusy) return setTimeout(() => startWatch(date), 150);
+    stopWatch = window.watchBusy(date, set => { if (date === sel.date) { busy = set; renderSlots(); } });
+  }
+
+  // Sélectionne automatiquement le premier jour ouvert
+  // (on saute aujourd'hui s'il reste moins d'une heure avant la fermeture)
+  const todayHours = schedule[new Date().getDay()];
+  const lateToday = !todayHours || new Date().getHours() * 60 + new Date().getMinutes() + 60 > todayHours[1] * 60;
+  const firstOpen = [...document.querySelectorAll('.day:not(:disabled)')].find((b, i) => !(lateToday && b.dataset.date === ymd(new Date())));
+  if (firstOpen) firstOpen.click();
 
   function slotsNeeded(){ return Math.ceil(sel.service.dur / STEP); }
 
   function renderSlots(loading){
     const box = el('slots');
-    if (!sel.service || !sel.date) { box.innerHTML = '<span class="hint">Choisis d\'abord un service et un jour.</span>'; return; }
+    if (!sel.service || !sel.date) { box.innerHTML = '<span class="hint">Choisis d\'abord un service.</span>'; return; }
     if (loading) { box.innerHTML = '<span class="hint">Chargement des disponibilités…</span>'; return; }
     const d = new Date(sel.date + 'T00:00'), [open, close] = schedule[d.getDay()];
     const isToday = sel.date === ymd(new Date());
@@ -755,7 +770,8 @@
   // Créneaux déjà pris pour un jour donné (aucune info personnelle, juste l'heure)
   window.watchBusy = (date, cb) =>
     onSnapshot(query(collection(db, 'busy'), where('date', '==', date)),
-      snap => cb(new Set(snap.docs.map(d => d.id.split('_')[1]))));
+      snap => cb(new Set(snap.docs.map(d => d.id.split('_')[1]))),
+      err => { console.error(err); cb(new Set()); });
 
   // Réserve : crée la réservation + bloque ses créneaux en une seule opération.
   // Si un créneau est déjà pris, Firebase refuse tout (pas de double réservation).
