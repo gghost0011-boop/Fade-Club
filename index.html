@@ -207,7 +207,46 @@
   }
   input:focus,select:focus{outline:none;border-color:var(--gold)}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .row>div{min-width:0}
+  .step{font-size:.8rem;color:var(--muted);margin-bottom:8px;display:block}
+  .step b{color:var(--gold)}
+  /* Choix du service */
+  .svc-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .svc{padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--text);text-align:left;cursor:pointer;transition:.25s;font-family:inherit}
+  .svc b{display:block;font-size:.9rem}
+  .svc small{color:var(--muted);font-size:.78rem}
+  .svc:hover{border-color:rgba(212,168,75,.5)}
+  .svc.on{border-color:var(--gold);background:rgba(212,168,75,.1)}
+  /* Choix du jour */
+  .days{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scrollbar-width:thin}
+  .day{flex:0 0 62px;padding:10px 0;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--text);cursor:pointer;text-align:center;transition:.25s;font-family:inherit}
+  .day small{display:block;font-size:.7rem;color:var(--muted);text-transform:uppercase}
+  .day b{font-family:'Bebas Neue';font-size:1.5rem;font-weight:400;line-height:1.1}
+  .day:hover:not(:disabled){border-color:rgba(212,168,75,.5)}
+  .day.on{border-color:var(--gold);background:var(--gold);color:#111}
+  .day.on small{color:#111}
+  .day:disabled{opacity:.3;cursor:not-allowed}
+  /* Choix de l'heure */
+  .slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px;min-height:44px}
+  .slot{padding:10px 0;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);cursor:pointer;font-family:inherit;font-size:.88rem;transition:.25s}
+  .slot:hover:not(:disabled){border-color:var(--gold)}
+  .slot.on{background:var(--gold);color:#111;border-color:var(--gold);font-weight:600}
+  .slot:disabled{opacity:.25;text-decoration:line-through;cursor:not-allowed}
+  .hint{color:var(--muted);font-size:.85rem;grid-column:1/-1;padding:10px 0}
+  input.err{border-color:#f87171}
   .form-ok{display:none;padding:14px;border-radius:12px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);color:#86efac;font-size:.9rem}
+  .form-err{display:none;padding:14px;border-radius:12px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);color:#fca5a5;font-size:.9rem}
+  .confirm{display:none;text-align:center;padding:30px 10px;position:relative;z-index:1}
+  .confirm .big{font-size:3rem}
+  .confirm h3{font-size:2.2rem;margin:6px 0}
+  .confirm .ref{font-family:'Bebas Neue';font-size:2rem;color:var(--gold);letter-spacing:.1em}
+  .confirm p{color:var(--muted);margin:8px 0 20px}
+  @media (max-width:520px){
+    .svc-grid{grid-template-columns:1fr}
+    .row{grid-template-columns:1fr}
+    .booking{padding:24px 18px}
+    .slots{grid-template-columns:repeat(auto-fill,minmax(64px,1fr))}
+  }
 
   footer{border-top:1px solid var(--line);padding:40px 0;color:var(--muted);font-size:.85rem}
   footer .container{display:flex;justify-content:space-between;flex-wrap:wrap;gap:20px}
@@ -419,31 +458,24 @@
           </div></li>
         </ul>
       </div>
-      <form id="form">
-        <div><label>Nom</label><input required placeholder="Ton nom"></div>
-        <div><label>Téléphone</label><input required type="tel" placeholder="(514) 000-0000"></div>
-        <div><label>Service</label>
-          <select required>
-            <option value="">Choisir un service</option>
-            <option>Coupe classique — 30 $</option>
-            <option>Skin fade — 35 $</option>
-            <option>Barbe sculptée — 20 $</option>
-            <option>Forfait Club — 50 $</option>
-          </select>
-        </div>
+      <form id="form" novalidate>
+        <div><span class="step"><b>1.</b> Choisis ton service</span><div class="svc-grid" id="svc-grid"></div></div>
+        <div><span class="step"><b>2.</b> Choisis le jour</span><div class="days" id="days"></div></div>
+        <div><span class="step"><b>3.</b> Choisis l'heure</span><div class="slots" id="slots"><span class="hint">Choisis d'abord un service et un jour.</span></div></div>
         <div class="row">
-          <div><label>Date</label><input required type="date" id="date"></div>
-          <div><label>Heure</label>
-            <select required>
-              <option value="">Heure</option>
-              <option>10:00</option><option>11:00</option><option>12:00</option><option>13:00</option>
-              <option>14:00</option><option>15:00</option><option>16:00</option><option>17:00</option><option>18:00</option>
-            </select>
-          </div>
+          <div><label>Nom</label><input id="r-name" placeholder="Ton nom" autocomplete="name" maxlength="60"></div>
+          <div><label>Téléphone</label><input id="r-phone" type="tel" placeholder="(514) 000-0000" autocomplete="tel" maxlength="20"></div>
         </div>
-        <button class="btn" type="submit" style="width:100%">Confirmer la réservation</button>
-        <div class="form-ok" id="form-ok">✓ Demande envoyée ! On te confirme par texto sous peu.</div>
+        <button class="btn" type="submit" id="book-btn" style="width:100%">Confirmer la réservation</button>
+        <div class="form-err" id="form-err"></div>
       </form>
+      <div class="confirm" id="confirm">
+        <div class="big">✂️</div>
+        <h3>C'est réservé !</h3>
+        <div class="ref" id="c-ref"></div>
+        <p id="c-text"></p>
+        <button class="btn ghost" id="c-new" type="button">Faire une autre réservation</button>
+      </div>
     </div>
   </div>
 </section>
@@ -529,15 +561,122 @@
   const group = {0:'0',1:'1',2:'2',3:'2',4:'4',5:'4',6:'6'}[d];
   document.querySelectorAll(`#hours [data-day="${group}"]`).forEach(el => el.classList.add('today'));
 
-  // Formulaire
-  const dateInput = document.getElementById('date');
-  dateInput.min = now.toISOString().split('T')[0];
-  document.getElementById('form').onsubmit = e => {
-    e.preventDefault();
-    document.getElementById('form-ok').style.display = 'block';
-    e.target.reset();
-  };
   document.getElementById('year').textContent = now.getFullYear();
+
+  // ---------- RÉSERVATION EN LIGNE ----------
+  // Pour un autre barbier : change seulement SERVICES et schedule (plus haut).
+  const SERVICES = [
+    { id:'classique', name:'Coupe classique', price:30, dur:40 },
+    { id:'fade',      name:'Skin fade',       price:35, dur:45 },
+    { id:'barbe',     name:'Barbe sculptée',  price:20, dur:25 },
+    { id:'forfait',   name:'Forfait Club',    price:50, dur:70 }
+  ];
+  const STEP = 30; // un créneau = 30 minutes
+  const DAYS_AHEAD = 14;
+  const JOURS = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const hhmm = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+  const el = id => document.getElementById(id);
+
+  const sel = { service:null, date:null, time:null };
+  let busy = new Set(), stopWatch = null;
+
+  // Services
+  el('svc-grid').innerHTML = SERVICES.map(s =>
+    `<button type="button" class="svc" data-svc="${s.id}"><b>${s.name}</b><small>${s.price} $ · ${s.dur} min</small></button>`).join('');
+  el('svc-grid').onclick = e => {
+    const b = e.target.closest('.svc'); if (!b) return;
+    document.querySelectorAll('.svc').forEach(x => x.classList.toggle('on', x === b));
+    sel.service = SERVICES.find(s => s.id === b.dataset.svc);
+    sel.time = null; renderSlots();
+  };
+
+  // Jours (14 prochains jours, jours fermés grisés)
+  const days = [];
+  for (let i = 0; i < DAYS_AHEAD; i++) { const d = new Date(); d.setDate(d.getDate() + i); days.push(d); }
+  el('days').innerHTML = days.map(d =>
+    `<button type="button" class="day" data-date="${ymd(d)}" ${schedule[d.getDay()] ? '' : 'disabled'}>
+      <small>${days.indexOf(d) === 0 ? 'Auj.' : JOURS[d.getDay()]}</small><b>${d.getDate()}</b></button>`).join('');
+  el('days').onclick = e => {
+    const b = e.target.closest('.day'); if (!b || b.disabled) return;
+    document.querySelectorAll('.day').forEach(x => x.classList.toggle('on', x === b));
+    sel.date = b.dataset.date; sel.time = null;
+    busy = new Set(); renderSlots(true);
+    if (stopWatch) stopWatch();
+    // Écoute en direct les créneaux déjà pris pour ce jour
+    stopWatch = window.watchBusy ? window.watchBusy(sel.date, set => { busy = set; renderSlots(); }) : null;
+  };
+
+  function slotsNeeded(){ return Math.ceil(sel.service.dur / STEP); }
+
+  function renderSlots(loading){
+    const box = el('slots');
+    if (!sel.service || !sel.date) { box.innerHTML = '<span class="hint">Choisis d\'abord un service et un jour.</span>'; return; }
+    if (loading) { box.innerHTML = '<span class="hint">Chargement des disponibilités…</span>'; return; }
+    const d = new Date(sel.date + 'T00:00'), [open, close] = schedule[d.getDay()];
+    const isToday = sel.date === ymd(new Date());
+    const nowMin = new Date().getHours() * 60 + new Date().getMinutes() + 30; // au moins 30 min d'avance
+    const out = [];
+    for (let m = open * 60; m + sel.service.dur <= close * 60; m += STEP) {
+      const needed = Array.from({length: slotsNeeded()}, (_, i) => hhmm(m + i * STEP));
+      const free = needed.every(t => !busy.has(t)) && !(isToday && m < nowMin);
+      const t = hhmm(m);
+      if (sel.time === t && !free) sel.time = null;
+      out.push(`<button type="button" class="slot${sel.time === t ? ' on' : ''}" data-t="${t}" ${free ? '' : 'disabled'}>${t.replace(':', ' h ')}</button>`);
+    }
+    box.innerHTML = out.length && out.some(s => !s.includes('disabled'))
+      ? out.join('') : '<span class="hint">Plus de place ce jour-là 😕 Essaie un autre jour.</span>';
+  }
+  el('slots').onclick = e => {
+    const b = e.target.closest('.slot'); if (!b || b.disabled) return;
+    sel.time = b.dataset.t; renderSlots();
+  };
+
+  // Envoi
+  el('form').onsubmit = async e => {
+    e.preventDefault();
+    const err = el('form-err'); err.style.display = 'none';
+    const name = el('r-name').value.trim(), phone = el('r-phone').value.trim();
+    el('r-name').classList.toggle('err', !name);
+    el('r-phone').classList.toggle('err', phone.replace(/\D/g, '').length < 10);
+    let msg = '';
+    if (!sel.service) msg = 'Choisis un service.';
+    else if (!sel.date) msg = 'Choisis un jour.';
+    else if (!sel.time) msg = 'Choisis une heure.';
+    else if (!name || phone.replace(/\D/g, '').length < 10) msg = 'Entre ton nom et un numéro de téléphone valide.';
+    if (msg) { err.textContent = msg; err.style.display = 'block'; return; }
+
+    const start = Number(sel.time.slice(0,2)) * 60 + Number(sel.time.slice(3));
+    const resa = {
+      ref: Math.random().toString(36).slice(2, 6).toUpperCase(),
+      name: name.slice(0, 60), phone: phone.slice(0, 20),
+      service: sel.service.name, price: sel.service.price, duration: sel.service.dur,
+      date: sel.date, time: sel.time,
+      slots: Array.from({length: slotsNeeded()}, (_, i) => hhmm(start + i * STEP))
+    };
+    const btn = el('book-btn'); btn.disabled = true; btn.textContent = 'Réservation en cours…';
+    try {
+      if (!window.book) throw new Error('offline');
+      await window.book(resa);
+      const d = new Date(sel.date + 'T00:00');
+      el('c-ref').textContent = '#' + resa.ref;
+      el('c-text').textContent = `${resa.service} le ${d.toLocaleDateString('fr-CA', {weekday:'long', day:'numeric', month:'long'})} à ${sel.time.replace(':', ' h ')}. On t'attend, ${name} !`;
+      el('form').style.display = 'none'; el('confirm').style.display = 'block';
+    } catch (ex) {
+      console.error(ex);
+      err.textContent = ex.code === 'permission-denied'
+        ? 'Oups, ce créneau vient d\'être pris par quelqu\'un d\'autre. Choisis une autre heure.'
+        : 'La réservation n\'a pas pu être envoyée. Vérifie ta connexion et réessaie.';
+      err.style.display = 'block';
+      sel.time = null; renderSlots();
+    } finally {
+      btn.disabled = false; btn.textContent = 'Confirmer la réservation';
+    }
+  };
+  el('c-new').onclick = () => {
+    el('confirm').style.display = 'none'; el('form').style.display = 'grid';
+    sel.time = null; renderSlots();
+  };
 
   // ---------- CHATBOT (démo à règles, à remplacer par une IA) ----------
   const chat = document.getElementById('chat');
@@ -595,6 +734,39 @@
   document.getElementById('chat-send').onclick = () => send(input.value);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') send(input.value); });
   document.querySelectorAll('#quick button').forEach(b => b.onclick = () => send(b.dataset.q));
+</script>
+
+<!-- ================= FIREBASE : réservations ================= -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
+  import { getFirestore, collection, query, where, onSnapshot, writeBatch, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
+
+  // Pour un vrai client : remplace ce bloc par la config de SON projet Firebase.
+  const firebaseConfig = {
+    apiKey: "AIzaSyDvBsLan_GXqEb58EDplCaVUuJlspthW-4",
+    authDomain: "le-comptoir-du-quartier.firebaseapp.com",
+    projectId: "le-comptoir-du-quartier",
+    storageBucket: "le-comptoir-du-quartier.firebasestorage.app",
+    messagingSenderId: "362121398498",
+    appId: "1:362121398498:web:48741a185242795cd1b6bb"
+  };
+  const db = getFirestore(initializeApp(firebaseConfig));
+
+  // Créneaux déjà pris pour un jour donné (aucune info personnelle, juste l'heure)
+  window.watchBusy = (date, cb) =>
+    onSnapshot(query(collection(db, 'busy'), where('date', '==', date)),
+      snap => cb(new Set(snap.docs.map(d => d.id.split('_')[1]))));
+
+  // Réserve : crée la réservation + bloque ses créneaux en une seule opération.
+  // Si un créneau est déjà pris, Firebase refuse tout (pas de double réservation).
+  window.book = async r => {
+    const id = `${r.date}_${r.time}`;
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'reservations', id), { ...r, status: 'confirmee', createdAt: serverTimestamp() });
+    r.slots.forEach(s => batch.set(doc(db, 'busy', `${r.date}_${s}`), { date: r.date, res: id }));
+    await batch.commit();
+    return id;
+  };
 </script>
 </body>
 </html>
