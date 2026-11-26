@@ -234,7 +234,10 @@
   .slot{padding:10px 0;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);cursor:pointer;font-family:inherit;font-size:.88rem;transition:.25s}
   .slot:hover:not(:disabled){border-color:var(--gold)}
   .slot.on{background:var(--gold);color:#111;border-color:var(--gold);font-weight:600}
-  .slot:disabled{opacity:.25;text-decoration:line-through;cursor:not-allowed}
+  .slot:disabled{opacity:.3;cursor:not-allowed}
+  .slot.taken{opacity:1;display:flex;flex-direction:column;align-items:center;line-height:1.15;padding:6px 0;border-color:rgba(248,113,113,.25);background:rgba(248,113,113,.06)}
+  .slot.taken span{color:#6b6b73;text-decoration:line-through;font-size:.8rem}
+  .slot.taken small{color:#f87171;font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em}
   .hint{color:var(--muted);font-size:.85rem;grid-column:1/-1;padding:10px 0}
   input.err{border-color:#f87171}
   .form-ok{display:none;padding:14px;border-radius:12px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);color:#86efac;font-size:.9rem}
@@ -582,7 +585,7 @@
   const el = id => document.getElementById(id);
 
   const sel = { service:null, date:null, time:null };
-  let busy = new Set(), stopWatch = null;
+  let busy = new Set(), stopWatch = null, submitting = false;
 
   // Services
   el('svc-grid').innerHTML = SERVICES.map(s =>
@@ -632,15 +635,20 @@
     const isToday = sel.date === ymd(new Date());
     const nowMin = new Date().getHours() * 60 + new Date().getMinutes() + 30; // au moins 30 min d'avance
     const out = [];
+    let anyFree = false;
     for (let m = open * 60; m + sel.service.dur <= close * 60; m += STEP) {
+      if (isToday && m < nowMin) continue; // heures passées : on ne les montre pas
+      const t = hhmm(m), label = t.replace(':', ' h ');
       const needed = Array.from({length: slotsNeeded()}, (_, i) => hhmm(m + i * STEP));
-      const free = needed.every(t => !busy.has(t)) && !(isToday && m < nowMin);
-      const t = hhmm(m);
-      if (sel.time === t && !free) sel.time = null;
-      out.push(`<button type="button" class="slot${sel.time === t ? ' on' : ''}" data-t="${t}" ${free ? '' : 'disabled'}>${t.replace(':', ' h ')}</button>`);
+      const taken = busy.has(t);                       // quelqu'un a déjà réservé à cette heure
+      const free = needed.every(x => !busy.has(x));    // assez de temps libre pour ce service
+      if (sel.time === t && !free && !submitting) sel.time = null;
+      if (free) anyFree = true;
+      out.push(taken
+        ? `<button type="button" class="slot taken" disabled aria-label="${label}, déjà pris"><span>${label}</span><small>Pris</small></button>`
+        : `<button type="button" class="slot${sel.time === t ? ' on' : ''}" data-t="${t}" ${free ? '' : 'disabled title="Pas assez de temps avant le prochain rendez-vous"'}>${label}</button>`);
     }
-    box.innerHTML = out.length && out.some(s => !s.includes('disabled'))
-      ? out.join('') : '<span class="hint">Plus de place ce jour-là 😕 Essaie un autre jour.</span>';
+    box.innerHTML = anyFree ? out.join('') : '<span class="hint">Plus de place ce jour-là 😕 Essaie un autre jour.</span>';
   }
   el('slots').onclick = e => {
     const b = e.target.closest('.slot'); if (!b || b.disabled) return;
@@ -682,14 +690,20 @@
       slots: Array.from({length: slotsNeeded()}, (_, i) => hhmm(start + i * STEP))
     };
     const btn = el('book-btn'); btn.disabled = true; btn.textContent = 'Réservation en cours…';
+    submitting = true;
+    let booked = false;
     try {
       if (!window.book) throw new Error('offline');
       await window.book(resa);
-      const d = new Date(sel.date + 'T00:00');
+      booked = true;
+      // On utilise les infos de la réservation (pas la sélection, qui change dès que le créneau devient « pris »)
+      const d = new Date(resa.date + 'T00:00');
       el('c-ref').textContent = '#' + resa.ref;
-      el('c-text').textContent = `${resa.service} le ${d.toLocaleDateString('fr-CA', {weekday:'long', day:'numeric', month:'long'})} à ${sel.time.replace(':', ' h ')}. On t'attend, ${name} !`;
+      el('c-text').textContent = `${resa.service} le ${d.toLocaleDateString('fr-CA', {weekday:'long', day:'numeric', month:'long'})} à ${resa.time.replace(':', ' h ')}. On t'attend, ${resa.name} !`;
       el('form').style.display = 'none'; el('confirm').style.display = 'block';
+      sel.time = null;
     } catch (ex) {
+      if (booked) { el('form').style.display = 'none'; el('confirm').style.display = 'block'; return; }
       console.error(ex);
       err.textContent = ex.code === 'permission-denied'
         ? 'Oups, ce créneau vient d\'être pris par quelqu\'un d\'autre. Choisis une autre heure.'
@@ -697,7 +711,9 @@
       err.style.display = 'block';
       sel.time = null; renderSlots();
     } finally {
+      submitting = false;
       btn.disabled = false; btn.textContent = 'Confirmer la réservation';
+      renderSlots();
     }
   };
   el('c-new').onclick = () => {
