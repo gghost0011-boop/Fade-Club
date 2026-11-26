@@ -467,7 +467,7 @@
         <div><span class="step"><b>3.</b> Choisis l'heure</span><div class="slots" id="slots"><span class="hint">Choisis d'abord un service et un jour.</span></div></div>
         <div class="row">
           <div><label>Nom</label><input id="r-name" placeholder="Ton nom" autocomplete="name" maxlength="60"></div>
-          <div><label>Téléphone</label><input id="r-phone" type="tel" placeholder="(514) 000-0000" autocomplete="tel" maxlength="20"></div>
+          <div><label>Téléphone</label><input id="r-phone" type="tel" inputmode="tel" placeholder="(000) 000-0000" autocomplete="tel"></div>
         </div>
         <button class="btn" type="submit" id="book-btn" style="width:100%">Confirmer la réservation</button>
         <div class="form-err" id="form-err"></div>
@@ -646,6 +646,18 @@
     const b = e.target.closest('.slot'); if (!b || b.disabled) return;
     sel.time = b.dataset.t; renderSlots();
   };
+
+  // Téléphone : se met en forme tout seul → (514) 452-9798, (438) …, (263) …
+  el('r-phone').addEventListener('input', e => {
+    let d = e.target.value.replace(/\D/g, '');
+    if (d.length === 11 && d[0] === '1') d = d.slice(1); // enlève le 1 de +1
+    d = d.slice(0, 10);
+    e.target.value =
+      d.length > 6 ? `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}` :
+      d.length > 3 ? `(${d.slice(0,3)}) ${d.slice(3)}` :
+      d.length > 0 ? `(${d}` : '';
+    e.target.classList.remove('err');
+  });
 
   // Envoi
   el('form').onsubmit = async e => {
