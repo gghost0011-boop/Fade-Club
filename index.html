@@ -215,6 +215,14 @@
   .step b{color:var(--gold)}
   /* Choix du service */
   .svc-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .barber-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+  .barber{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--text);text-align:left;cursor:pointer;transition:.25s;font-family:inherit;min-width:0}
+  .barber .av{flex:0 0 36px;height:36px;border-radius:50%;display:grid;place-items:center;background:rgba(212,168,75,.15);color:var(--gold);font-family:'Bebas Neue';font-size:1.2rem}
+  .barber b{display:block;font-size:.9rem}
+  .barber small{display:block;color:var(--muted);font-size:.72rem;line-height:1.3}
+  .barber span:last-child{min-width:0}
+  .barber:hover{border-color:rgba(212,168,75,.5)}
+  .barber.on{border-color:var(--gold);background:rgba(212,168,75,.1)}
   .svc{padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--text);text-align:left;cursor:pointer;transition:.25s;font-family:inherit}
   .svc b{display:block;font-size:.9rem}
   .svc small{color:var(--muted);font-size:.78rem}
@@ -465,9 +473,10 @@
         </ul>
       </div>
       <form id="form" novalidate>
-        <div><span class="step"><b>1.</b> Choisis ton service</span><div class="svc-grid" id="svc-grid"></div></div>
-        <div><span class="step"><b>2.</b> Choisis le jour</span><div class="days" id="days"></div></div>
-        <div><span class="step"><b>3.</b> Choisis l'heure</span><div class="slots" id="slots"><span class="hint">Choisis d'abord un service et un jour.</span></div></div>
+        <div><span class="step"><b>1.</b> Choisis ton barbier</span><div class="barber-grid" id="barber-grid"></div></div>
+        <div><span class="step"><b>2.</b> Choisis ton service</span><div class="svc-grid" id="svc-grid"></div></div>
+        <div><span class="step"><b>3.</b> Choisis le jour</span><div class="days" id="days"></div></div>
+        <div><span class="step"><b>4.</b> Choisis l'heure</span><div class="slots" id="slots"><span class="hint">Choisis d'abord un service et un jour.</span></div></div>
         <div class="row">
           <div><label>Nom</label><input id="r-name" placeholder="Ton nom" autocomplete="name" maxlength="60"></div>
           <div><label>Téléphone</label><input id="r-phone" type="tel" inputmode="tel" placeholder="(000) 000-0000" autocomplete="tel"></div>
@@ -570,7 +579,13 @@
   document.getElementById('year').textContent = now.getFullYear();
 
   // ---------- RÉSERVATION EN LIGNE ----------
-  // Pour un autre barbier : change seulement SERVICES et schedule (plus haut).
+  // Pour un autre salon : change seulement BARBERS, SERVICES et schedule (plus haut).
+  // days = jours où le barbier travaille (0 = dimanche … 6 = samedi), aux heures du salon.
+  const BARBERS = [
+    { id:'karim', name:'Karim', role:'Spécialiste fade',  days:[2,3,4,5,6] },
+    { id:'mo',    name:'Mo',    role:'Barbe & contours',  days:[0,4,5,6] },
+    { id:'alex',  name:'Alex',  role:'Coupes classiques', days:[0,2,3,4,5] }
+  ];
   const SERVICES = [
     { id:'classique', name:'Coupe classique', price:30, dur:40 },
     { id:'fade',      name:'Skin fade',       price:35, dur:45 },
@@ -584,8 +599,24 @@
   const hhmm = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
   const el = id => document.getElementById(id);
 
-  const sel = { service:null, date:null, time:null };
-  let busy = new Set(), stopWatch = null, submitting = false;
+  const sel = { barber:'any', service:null, date:null, time:null };
+  let busy = {}, stopWatch = null, submitting = false;   // busy = { idBarbier: Set des heures prises }
+  const busyOf = id => busy[id] || new Set();
+  const opensOn = wd => !!schedule[wd];
+  // Barbiers qui travaillent ce jour-là (selon le choix : un barbier précis ou « peu importe »)
+  const workingOn = wd => !opensOn(wd) ? [] :
+    BARBERS.filter(b => b.days.includes(wd) && (sel.barber === 'any' || sel.barber === b.id));
+
+  // Barbiers
+  el('barber-grid').innerHTML =
+    `<button type="button" class="barber on" data-b="any"><span class="av">★</span><span><b>Peu importe</b><small>Le premier disponible</small></span></button>` +
+    BARBERS.map(b => `<button type="button" class="barber" data-b="${b.id}"><span class="av">${b.name[0]}</span><span><b>${b.name}</b><small>${b.role}</small></span></button>`).join('');
+  el('barber-grid').onclick = e => {
+    const b = e.target.closest('.barber'); if (!b) return;
+    document.querySelectorAll('.barber').forEach(x => x.classList.toggle('on', x === b));
+    sel.barber = b.dataset.b; sel.time = null;
+    refreshDays();
+  };
 
   // Services
   el('svc-grid').innerHTML = SERVICES.map(s =>
@@ -601,13 +632,13 @@
   const days = [];
   for (let i = 0; i < DAYS_AHEAD; i++) { const d = new Date(); d.setDate(d.getDate() + i); days.push(d); }
   el('days').innerHTML = days.map(d =>
-    `<button type="button" class="day" data-date="${ymd(d)}" ${schedule[d.getDay()] ? '' : 'disabled'}>
+    `<button type="button" class="day" data-date="${ymd(d)}" ${workingOn(d.getDay()).length ? '' : 'disabled'}>
       <small>${days.indexOf(d) === 0 ? 'Auj.' : JOURS[d.getDay()]}</small><b>${d.getDate()}</b></button>`).join('');
   el('days').onclick = e => {
     const b = e.target.closest('.day'); if (!b || b.disabled) return;
     document.querySelectorAll('.day').forEach(x => x.classList.toggle('on', x === b));
     sel.date = b.dataset.date; sel.time = null;
-    busy = new Set(); renderSlots(true);
+    busy = {}; renderSlots(true);
     if (stopWatch) { stopWatch(); stopWatch = null; }
     startWatch(sel.date);
   };
@@ -620,10 +651,21 @@
 
   // Sélectionne automatiquement le premier jour ouvert
   // (on saute aujourd'hui s'il reste moins d'une heure avant la fermeture)
-  const todayHours = schedule[new Date().getDay()];
-  const lateToday = !todayHours || new Date().getHours() * 60 + new Date().getMinutes() + 60 > todayHours[1] * 60;
-  const firstOpen = [...document.querySelectorAll('.day:not(:disabled)')].find((b, i) => !(lateToday && b.dataset.date === ymd(new Date())));
-  if (firstOpen) firstOpen.click();
+  // Quand on change de barbier : grise les jours où il ne travaille pas
+  function refreshDays(){
+    document.querySelectorAll('.day').forEach(b => {
+      b.disabled = !workingOn(new Date(b.dataset.date + 'T00:00').getDay()).length;
+      if (b.disabled) b.classList.remove('on');
+    });
+    const cur = document.querySelector('.day.on');
+    if (cur) { renderSlots(); return; }
+    sel.date = null;
+    const todayHours = schedule[new Date().getDay()];
+    const lateToday = !todayHours || new Date().getHours() * 60 + new Date().getMinutes() + 60 > todayHours[1] * 60;
+    const firstOpen = [...document.querySelectorAll('.day:not(:disabled)')].find(b => !(lateToday && b.dataset.date === ymd(new Date())));
+    if (firstOpen) firstOpen.click(); else renderSlots();
+  }
+  refreshDays();
 
   function slotsNeeded(){ return Math.ceil(sel.service.dur / STEP); }
 
@@ -632,6 +674,7 @@
     if (!sel.service || !sel.date) { box.innerHTML = '<span class="hint">Choisis d\'abord un service.</span>'; return; }
     if (loading) { box.innerHTML = '<span class="hint">Chargement des disponibilités…</span>'; return; }
     const d = new Date(sel.date + 'T00:00'), [open, close] = schedule[d.getDay()];
+    const team = workingOn(d.getDay());
     const isToday = sel.date === ymd(new Date());
     const nowMin = new Date().getHours() * 60 + new Date().getMinutes() + 30; // au moins 30 min d'avance
     const out = [];
@@ -640,8 +683,8 @@
       if (isToday && m < nowMin) continue; // heures passées : on ne les montre pas
       const t = hhmm(m), label = t.replace(':', ' h ');
       const needed = Array.from({length: slotsNeeded()}, (_, i) => hhmm(m + i * STEP));
-      const taken = busy.has(t);                       // quelqu'un a déjà réservé à cette heure
-      const free = needed.every(x => !busy.has(x));    // assez de temps libre pour ce service
+      const taken = team.every(b => busyOf(b.id).has(t));                          // tous les barbiers sont pris à cette heure
+      const free = team.some(b => needed.every(x => !busyOf(b.id).has(x)));        // au moins un barbier a assez de temps
       if (sel.time === t && !free && !submitting) sel.time = null;
       if (free) anyFree = true;
       out.push(taken
@@ -682,12 +725,17 @@
     if (msg) { err.textContent = msg; err.style.display = 'block'; return; }
 
     const start = Number(sel.time.slice(0,2)) * 60 + Number(sel.time.slice(3));
+    const neededSlots = Array.from({length: slotsNeeded()}, (_, i) => hhmm(start + i * STEP));
+    const barber = workingOn(new Date(sel.date + 'T00:00').getDay())
+      .find(b => neededSlots.every(x => !busyOf(b.id).has(x)));
+    if (!barber) { err.textContent = 'Ce créneau vient d\'être pris. Choisis une autre heure.'; err.style.display = 'block'; sel.time = null; renderSlots(); return; }
     const resa = {
+      barber: barber.id, barberName: barber.name,
       ref: Math.random().toString(36).slice(2, 6).toUpperCase(),
       name: name.slice(0, 60), phone: phone.slice(0, 20),
       service: sel.service.name, price: sel.service.price, duration: sel.service.dur,
       date: sel.date, time: sel.time,
-      slots: Array.from({length: slotsNeeded()}, (_, i) => hhmm(start + i * STEP))
+      slots: neededSlots
     };
     const btn = el('book-btn'); btn.disabled = true; btn.textContent = 'Réservation en cours…';
     submitting = true;
@@ -699,7 +747,7 @@
       // On utilise les infos de la réservation (pas la sélection, qui change dès que le créneau devient « pris »)
       const d = new Date(resa.date + 'T00:00');
       el('c-ref').textContent = '#' + resa.ref;
-      el('c-text').textContent = `${resa.service} le ${d.toLocaleDateString('fr-CA', {weekday:'long', day:'numeric', month:'long'})} à ${resa.time.replace(':', ' h ')}. On t'attend, ${resa.name} !`;
+      el('c-text').textContent = `${resa.service} avec ${resa.barberName}, le ${d.toLocaleDateString('fr-CA', {weekday:'long', day:'numeric', month:'long'})} à ${resa.time.replace(':', ' h ')}. On t'attend, ${resa.name} !`;
       el('form').style.display = 'none'; el('confirm').style.display = 'block';
       sel.time = null;
     } catch (ex) {
@@ -732,6 +780,7 @@
     { keys: ['prix','combien','tarif','coût','cout','$'], text: "Coupe classique 30 $, skin fade 35 $, barbe 20 $, et le Forfait Club (fade + barbe) 50 $." },
     { keys: ['adresse','où','ou est','situé','metro','métro','parking'], text: "On est au 1234, rue Saint-Denis, à Montréal. Stationnement dans la rue et métro à 5 minutes à pied." },
     { keys: ['réserv','reserv','rendez','rdv','place','dispo'], text: "Parfait ! Tu peux réserver directement avec le formulaire juste ici. Je t'y emmène 👇", action: () => setTimeout(() => document.getElementById('reserver').scrollIntoView({behavior:'smooth'}), 900) },
+    { keys: ['barbier','karim','alex',' mo ','équipe','equipe','qui coupe'], text: "On est trois : Karim (spécialiste fade, du mardi au samedi), Mo (barbe et contours, du jeudi au dimanche) et Alex (coupes classiques, dimanche et du mardi au vendredi). Tu choisis ton barbier directement dans le formulaire de réservation 👇", action: () => setTimeout(() => document.getElementById('reserver').scrollIntoView({behavior:'smooth'}), 900) },
     { keys: ['enfant','kid','fils'], text: "Oui, on coupe les enfants de 5 ans et plus, au même prix que la coupe classique." },
     { keys: ['paie','paye','carte','cash','comptant','interac'], text: "On accepte le comptant, Interac et les cartes de crédit." },
     { keys: ['bonjour','salut','allo','yo','hello'], text: "Salut ! Comment je peux t'aider ? 😊" },
@@ -795,19 +844,27 @@
   };
   const db = getFirestore(initializeApp(firebaseConfig));
 
-  // Créneaux déjà pris pour un jour donné (aucune info personnelle, juste l'heure)
+  // Créneaux déjà pris pour un jour donné, par barbier (aucune info personnelle)
+  // id d'un document busy : date_barbier_heure  →  2026-12-03_karim_14:30
   window.watchBusy = (date, cb) =>
     onSnapshot(query(collection(db, 'busy'), where('date', '==', date)),
-      snap => cb(new Set(snap.docs.map(d => d.id.split('_')[1]))),
-      err => { console.error(err); cb(new Set()); });
+      snap => {
+        const map = {};
+        snap.docs.forEach(d => {
+          const [, barber, slot] = d.id.split('_');
+          if (barber && slot) (map[barber] = map[barber] || new Set()).add(slot);
+        });
+        cb(map);
+      },
+      err => { console.error(err); cb({}); });
 
   // Réserve : crée la réservation + bloque ses créneaux en une seule opération.
   // Si un créneau est déjà pris, Firebase refuse tout (pas de double réservation).
   window.book = async r => {
-    const id = `${r.date}_${r.time}`;
+    const id = `${r.date}_${r.barber}_${r.time}`;
     const batch = writeBatch(db);
     batch.set(doc(db, 'reservations', id), { ...r, status: 'confirmee', createdAt: serverTimestamp() });
-    r.slots.forEach(s => batch.set(doc(db, 'busy', `${r.date}_${s}`), { date: r.date, res: id }));
+    r.slots.forEach(s => batch.set(doc(db, 'busy', `${r.date}_${r.barber}_${s}`), { date: r.date, barber: r.barber, res: id }));
     await batch.commit();
     return id;
   };

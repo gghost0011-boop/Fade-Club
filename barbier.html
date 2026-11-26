@@ -54,6 +54,11 @@
   .day.on small{color:#111}
   .day.on .n{background:#111;color:var(--gold)}
 
+  .team{display:flex;gap:8px;overflow-x:auto;margin-bottom:16px;padding-bottom:4px}
+  .tm{flex:0 0 auto;padding:9px 16px;border-radius:50px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:.88rem}
+  .tm.on{background:var(--gold);color:#111;border-color:var(--gold);font-weight:600}
+  .tm .c{opacity:.7;margin-left:4px}
+  .chip{display:inline-block;font-size:.72rem;padding:2px 9px;border-radius:50px;background:rgba(212,168,75,.12);color:var(--gold);margin-right:6px}
   .day-title{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px}
   .day-title h2{font-size:2rem}
   .day-title span{color:var(--muted);font-size:.9rem}
@@ -120,6 +125,7 @@
       <div class="stat"><b id="s-money">0 $</b><small>Prévu aujourd'hui</small></div>
       <div class="stat"><b id="s-week">0</b><small>RDV à venir (14 jours)</small></div>
     </div>
+    <div class="team" id="team"></div>
     <div class="days" id="days"></div>
     <div class="day-title"><h2 id="day-name"></h2><span id="day-count"></span></div>
     <div class="list" id="list"></div>
@@ -149,6 +155,13 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const JOURS = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+  // Même liste que sur le site client (index.html)
+  const BARBERS = [
+    { id:'karim', name:'Karim' },
+    { id:'mo',    name:'Mo' },
+    { id:'alex',  name:'Alex' }
+  ];
+  let who = 'all';   // barbier affiché : 'all' ou un id
   const SCHEDULE = {0:[11,16],1:null,2:[10,19],3:[10,19],4:[10,21],5:[10,21],6:[9,18]};
 
   /* ---------- Connexion ---------- */
@@ -196,7 +209,7 @@
         beep();
         const r = resas.find(x => x.id === added[added.length - 1]);
         const d = new Date(r.date + 'T00:00');
-        toast(`✂️ Nouveau RDV : ${r.name}, ${JOURS[d.getDay()]} ${d.getDate()} à ${r.time.replace(':', ' h ')}`);
+        toast(`✂️ Nouveau RDV${r.barberName ? ' avec ' + r.barberName : ''} : ${r.name}, ${JOURS[d.getDay()]} ${d.getDate()} à ${r.time.replace(':', ' h ')}`);
       }
       first = false;
     }, err => {
@@ -207,6 +220,17 @@
 
   function render(){
     const today = ymd(new Date());
+    // Onglets barbiers (avec le nombre de RDV à venir de chacun)
+    const upcoming = resas.filter(r => r.status === 'confirmee');
+    $('#team').innerHTML = [{ id:'all', name:'Tous' }, ...BARBERS].map(b => {
+      const n = b.id === 'all' ? upcoming.length : upcoming.filter(r => r.barber === b.id).length;
+      return `<button class="tm${who === b.id ? ' on' : ''}" data-who="${b.id}">${b.name}<span class="c">${n}</span></button>`;
+    }).join('');
+    const all = resas;
+    resas = who === 'all' ? all : all.filter(r => r.barber === who);
+    try { draw(today); } finally { resas = all; }
+  }
+  function draw(today){
     const active = r => r.status !== 'absent';
     // Statistiques
     const todays = resas.filter(r => r.date === today && active(r));
@@ -245,13 +269,17 @@
       return `<article class="rdv ${r.status}${next && next.id === r.id ? ' next' : ''}${added.includes(r.id) ? ' new' : ''}">
         <div class="time">${esc(r.time.replace(':', 'h'))}<small>→ ${end.replace(':', 'h')}</small></div>
         <div class="who"><b>${esc(r.name)}${badge}</b>
-          <span class="svc">${esc(r.service)} · ${Number(r.price)} $ · #${esc(r.ref)}</span><br>
+          <span class="svc">${r.barberName && who === 'all' ? `<span class="chip">✂️ ${esc(r.barberName)}</span>` : ''}${esc(r.service)} · ${Number(r.price)} $ · #${esc(r.ref)}</span><br>
           <a href="tel:${esc(r.phone)}">📞 ${esc(r.phone)}</a></div>
         <div class="actions">${actions}</div>
       </article>`;
     }).join('') : `<div class="empty">${SCHEDULE[sd.getDay()] ? 'Aucun rendez-vous pour ce jour.' : 'Le salon est fermé ce jour-là.'}</div>`;
   }
 
+  $('#team').onclick = e => {
+    const b = e.target.closest('.tm'); if (!b) return;
+    who = b.dataset.who; added = []; render();
+  };
   $('#days').onclick = e => {
     const b = e.target.closest('.day'); if (!b) return;
     selected = b.dataset.date; added = []; render();
@@ -279,7 +307,7 @@
       try {
         const batch = writeBatch(db);
         batch.delete(doc(db, 'reservations', r.id));
-        (r.slots || [r.time]).forEach(t => batch.delete(doc(db, 'busy', `${r.date}_${t}`)));
+        (r.slots || [r.time]).forEach(t => batch.delete(doc(db, 'busy', r.barber ? `${r.date}_${r.barber}_${t}` : `${r.date}_${t}`)));
         await batch.commit();
         toast('Rendez-vous annulé, le créneau est de nouveau libre.');
       } catch (err) { console.error(err); toast('Erreur : annulation impossible.'); }
